@@ -1,0 +1,383 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          minetestserver
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Minetest server
+# Description:       Minetest server with backup and ramdisk
+### END INIT INFO
+
+# /etc/init.d/minetestserver
+# Author: Andrey
+# New version 2016.11
+# WARNING: minetest need to be changed to use /map/map.sqlite
+
+#Settings
+SERVICE="minetestserver"
+WORLD="justtest"
+USERNAME="minetestuser"
+PERMISSIONS="$USERNAME:$USERNAME"
+MINETESTFOLDER="/home/$USERNAME/.minetest"
+WORLDFOLDER="/home/$USERNAME/.minetest/worlds/$WORLD"
+INVOCATION="/usr/local/bin/minetestserver"
+PIDFILE="/var/run/$SERVICE.pid"
+OPTIONS="--worldname $WORLD"
+MAPRAM="5G"
+PLAYERRAM="100M"
+STARTUPCRASHWAITSECONDS=3   #wait for mod crash during startup
+
+#Settings for "keepup" loop.
+LOOPSERVICE="minekeepup"
+LOOPPIDFILE="/var/run/$LOOPSERVICE.pid"
+SAVEHOUR=22
+SAVEMINUTE=0
+BACKUPDAYOFWEEK=5
+BACKUPHOUR=23
+BACKUPMINUTE=0
+
+# Exit if the package is not installed
+[ -x "$INVOCATION" ] || exit 0
+
+# Read configuration variable file if it is present
+[ -r /etc/default/$SERVICE ] && . /etc/default/$SERVICE
+
+# Load the VERBOSE setting and other rcS variables
+. /lib/init/vars.sh
+
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.2-14) to ensure that this file is present
+# and status_of_proc is working.
+. /lib/lsb/init-functions
+
+mt_start() {
+    if [ ! -f "$PIDFILE" ]; then
+
+        if [ ! -d $WORLDFOLDER ]; then
+            echo "World $WORLDFOLDER does not exist! Copy your existing world here first!"
+            exit 3
+        else
+            #to easily copy world from somewhere else and dont bother with changing permissions
+            OWNER=$(stat -c "%U" $WORLDFOLDER)
+            if [ $USERNAME != $OWNER ]; then
+                chown $PERMISSIONS $MINETESTFOLDER -R
+            fi
+            if [ ! -d $WORLDFOLDER/map ]; then
+                echo "Moving 'map.sqlite' to folder 'map'. Minetest must be recompilled accordingly to use that folder!"
+                mkdir $WORLDFOLDER/map
+                chown $PERMISSIONS $WORLDFOLDER/map/
+                if [ -f $WORLDFOLDER/map.sqlite ]; then
+                    rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.sqlite $WORLDFOLDER/map/map.sqlite
+                fi
+            fi
+        fi
+
+        echo -n "Starting ramdisk 1..."
+        if [ -d $WORLDFOLDER/players.safe/ ]; then
+            mount -t ramfs -o size=$PLAYERRAM ramfs $WORLDFOLDER/players
+            chown $PERMISSIONS $WORLDFOLDER/players/
+            rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players.safe/ $WORLDFOLDER/players/
+        else
+            mkdir $WORLDFOLDER/players.safe
+            chown $PERMISSIONS $WORLDFOLDER/players.safe/
+            rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players/ $WORLDFOLDER/players.safe/
+            mount -t ramfs -o size=$PLAYERRAM ramfs $WORLDFOLDER/players
+            chown $PERMISSIONS $WORLDFOLDER/players/
+            rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players.safe/ $WORLDFOLDER/players/
+        fi
+        echo "done"
+
+        echo -n "Starting ramdisk 2..."
+        if [ -d $WORLDFOLDER/map.safe/ ]; then
+            mount -t ramfs -o size=$MAPRAM ramfs $WORLDFOLDER/map
+            chown $PERMISSIONS $WORLDFOLDER/map/
+            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map/map.sqlite
+        else
+            mkdir $WORLDFOLDER/map.safe
+            chown $PERMISSIONS $WORLDFOLDER/map.safe/
+            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+            mount -t ramfs -o size=$MAPRAM ramfs $WORLDFOLDER/map
+            chown $PERMISSIONS $WORLDFOLDER/map/
+            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map/map.sqlite
+        fi
+        echo "done"
+    fi
+
+
+    if [ ! -f "$PIDFILE.paused" ]; then
+        rm -f $PIDFILE.failed
+        echo -n "Starting $SERVICE..."
+        /sbin/start-stop-daemon --start --chuid "$USERNAME" --background --make-pidfile --pidfile $PIDFILE --name $SERVICE --exec $INVOCATION -- $OPTIONS
+        echo -n "waiting for mods..."
+        sleep $STARTUPCRASHWAITSECONDS
+        if [ -f /proc/$(cat $PIDFILE)/status ]; then
+            echo "done"
+            if [ ! -f $LOOPPIDFILE ]; then
+                echo -n "Starting $LOOPSERVICE..."
+                touch $LOOPPIDFILE
+                mt_loop &
+                echo "done"
+            fi
+            #logger "[$SERVICE] Started!"
+            exit 0
+        else
+            rm -f $PIDFILE
+            echo "failed"
+            echo -n "Syncing ramdisk 1..."
+            rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players/ $WORLDFOLDER/players.safe/
+            echo "done"
+            echo -n "Stopping ramdisk 1..."
+            umount $WORLDFOLDER/players
+            echo "done"
+            echo -n "Syncing ramdisk 2..."
+            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+            echo "done"
+            echo -n "Stopping ramdisk 2..."
+            umount $WORLDFOLDER/map
+            echo "done"
+            touch $PIDFILE.failed
+            #logger "[$SERVICE] Start failed!"
+            exit 3
+        fi
+    else
+        echo "$SERVICE is paused!"
+        exit 0
+    fi
+}
+
+mt_stop() {
+    if [ -f "$LOOPPIDFILE" ]; then
+        echo -n "Stopping $LOOPSERVICE..."
+        #/sbin/start-stop-daemon --stop --retry=TERM/30/KILL/5 --remove-pidfile --pidfile $LOOPPIDFILE
+        rm -f $LOOPPIDFILE
+        rm -f $PIDFILE.paused
+        rm -f $PIDFILE.failed
+        echo "done"
+        if [ -f "$PIDFILE" ]; then
+            echo -n "Stopping $SERVICE..."
+            /sbin/start-stop-daemon --stop --retry=TERM/30/KILL/5 --remove-pidfile --pidfile $PIDFILE --name $SERVICE
+            echo "done"
+        fi
+
+        echo -n "Syncing ramdisk 1..."
+        rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players/ $WORLDFOLDER/players.safe/
+        umount $WORLDFOLDER/players
+        echo "done"
+
+        echo -n "Syncing ramdisk 2..."
+        rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+        umount $WORLDFOLDER/map
+        echo "done"
+
+        #logger "[$SERVICE] Stopped!"
+    fi
+}
+
+#reload without sync or backup. for example, to apply minor mod changes
+mt_reload() {
+    if [ -f "$PIDFILE" ]; then
+        rm -f $PIDFILE.failed
+        echo -n "Stopping for reload..."
+        /sbin/start-stop-daemon --stop --retry=TERM/30/KILL/5 --pidfile $PIDFILE --name $SERVICE
+        echo "done"
+    fi
+}
+
+mt_pause() {
+    if [ -f "$PIDFILE" ]; then
+        echo -n "Pausing $SERVICE..."
+        /sbin/start-stop-daemon --stop --retry=TERM/30/KILL/5 --pidfile $PIDFILE --name $SERVICE
+        touch $PIDFILE.paused
+        echo "done"
+        logger "[$SERVICE] Paused!"
+    fi
+}
+
+mt_resume() {
+    if [ -f "$PIDFILE" ]; then
+        if [ -f "$PIDFILE.paused" ]; then
+            rm -f $PIDFILE.paused
+            rm -f $PIDFILE.failed
+            logger "[$SERVICE] Resumed!"
+        fi
+    fi
+}
+
+#forceful ramdisk sync
+mt_sync() {
+    mt_pause
+    echo -n "Syncing ramdisk 1..."
+    if [ ! -d $WORLDFOLDER/players.safe/ ]; then
+        mkdir $WORLDFOLDER/players.safe
+        chown $PERMISSIONS $WORLDFOLDER/players.safe/
+    fi
+    rm -f $WORLDFOLDER/players/*.~mt
+    rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players/ $WORLDFOLDER/players.safe/
+    echo "done"
+
+    echo -n "Syncing ramdisk 2..."
+    if [ ! -d $WORLDFOLDER/players.safe/ ]; then
+        mkdir $WORLDFOLDER/map.safe
+        chown $PERMISSIONS $WORLDFOLDER/map.safe/
+    fi
+    rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+    echo "done"
+    logger "[$SERVICE] Synced!"
+    mt_resume
+}
+
+#forceful backup
+mt_backup() {
+    echo -n "Backup players, auth, map and log..."
+    if [ ! -d $WORLDFOLDER/players.bac/ ]; then
+        mkdir $WORLDFOLDER/players.bac
+        chown $PERMISSIONS $WORLDFOLDER/players.bac/
+    fi
+    tar -cz --directory=$WORLDFOLDER --file=$WORLDFOLDER/players.bac/players`date +%F`.tar.gz players.safe/
+    chown $PERMISSIONS $WORLDFOLDER/players.bac/players`date +%F`.tar.gz
+    if [ ! -d $WORLDFOLDER/auth.bac/ ]; then
+        mkdir $WORLDFOLDER/auth.bac
+        chown $PERMISSIONS $WORLDFOLDER/auth.bac/
+    fi
+    gzip -ckNq $WORLDFOLDER/auth.txt > $WORLDFOLDER/auth.bac/auth`date +%F`.tar.gz
+    chown $PERMISSIONS $WORLDFOLDER/auth.bac/auth`date +%F`.tar.gz
+    if [ ! -d $WORLDFOLDER/map.bac/ ]; then
+        mkdir $WORLDFOLDER/map.bac
+        chown $PERMISSIONS $WORLDFOLDER/map.bac/
+    fi
+    rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map.bac/map.sqlite
+
+    mt_pause
+    if [ ! -d $MINETESTFOLDER/debug.bac/ ]; then
+        mkdir $MINETESTFOLDER/debug.bac
+        chown $PERMISSIONS $MINETESTFOLDER/debug.bac/
+    fi
+    gzip -ckNq $MINETESTFOLDER/debug.txt > $MINETESTFOLDER/debug.bac/debug`date +%F`.tar.gz
+    chown $PERMISSIONS $MINETESTFOLDER/debug.bac/debug`date +%F`.tar.gz
+    "" > $MINETESTFOLDER/debug.txt
+    chown $PERMISSIONS $MINETESTFOLDER/debug.txt
+    mt_resume
+    echo "done"
+    logger "[$SERVICE] Backup finished!"
+}
+
+#clean some unnieded files etc
+mt_maintenance() {
+    if [ -f "$PIDFILE" ]; then
+        mt_pause
+        if [ -f "$MINETESTFOLDER/clear_players.py" ]; then
+            echo -n "Clearing players..."
+            rm -f $WORLDFOLDER/players/*.~mt
+            python $MINETESTFOLDER/clear_players.py $WORLDFOLDER/players/
+            echo "done"
+        fi
+        mt_resume
+    else
+        if [ -f "$MINETESTFOLDER/clear_players.py" ]; then
+            echo "Clearing players..."
+            rm -f $WORLDFOLDER/players.safe/*.~mt
+            python $MINETESTFOLDER/clear_players.py $WORLDFOLDER/players.safe/
+            echo "Done!"
+        fi
+    fi
+    logger "[$SERVICE] Maintenance finished!"
+}
+
+mt_loop() {
+    echo "Started minekeepup monitor"
+    while [ -f $LOOPPIDFILE ]
+    do
+        D=$(date +%u)
+        H=$(date +%H)
+        M=$(date +%M)
+
+        if [ $SAVEHOUR -eq $H ] && [ $SAVEMINUTE -eq $M ]; then
+            mt_sync
+            #bring service up
+            if [ -f "$PIDFILE" ]; then
+                if [ ! -f /proc/$(cat $PIDFILE)/status ]; then
+                    if [ ! -f $PIDFILE.failed ]; then
+                        mt_start &
+                    fi
+                fi
+            fi
+
+            sleep 60
+        fi
+
+        if [ $BACKUPDAYOFWEEK -eq $D ] && [ $BACKUPHOUR -eq $H ] && [ $BACKUPMINUTE -eq $M ]; then
+            mt_backup
+            #bring service up
+            if [ -f "$PIDFILE" ]; then
+                if [ ! -f /proc/$(cat $PIDFILE)/status ]; then
+                    if [ ! -f $PIDFILE.failed ]; then
+                        mt_start &
+                    fi
+                fi
+            fi
+
+            sleep 60
+        fi
+
+        sleep 5
+        #bring service up if it crashed/reread/killed
+        if [ -f "$PIDFILE" ]; then
+            if [ ! -f /proc/$(cat $PIDFILE)/status ]; then
+                if [ ! -f $PIDFILE.failed ]; then
+                    mt_start &
+                fi
+            fi
+        fi
+    done
+}
+
+mt_status() {
+    if [ -f "$PIDFILE.paused" ]; then
+        echo "$SERVICE is paused!"
+        exit 1
+    fi
+    /sbin/start-stop-daemon --status --pidfile $PIDFILE --name $SERVICE | exit
+}
+
+
+#Start-Stop here
+case "$1" in
+start)
+mt_start
+;;
+stop)
+mt_stop
+;;
+reload)
+mt_reload
+;;
+force-reload)
+mt_reload
+;;
+pause)
+mt_pause
+;;
+resume)
+mt_resume
+;;
+sync)
+mt_sync
+;;
+backup)
+mt_backup
+;;
+maintenance)
+mt_maintenance
+;;
+status)
+mt_status
+;;
+
+*)
+echo "Usage: /etc/init.d/minetest {start|stop|reload|force-reload|pause|resume|sync|backup|maintenance|status}"
+exit 1
+;;
+esac
+
+exit 0
