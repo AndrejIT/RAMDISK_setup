@@ -15,7 +15,7 @@ Creates backups of player inventory files, auth.txt, map database and clears and
 Here is how i modified minetest map folder:
 
 commit 9caeb9cdc87e78827d96e2c0139e15dc1fd81384
-Author: AndrejIT <AndrejIT@rambler.ru>
+Author: AndrejIT
 Date:   Mon Oct 24 16:11:27 2016 +0300
 
     Store map.sqlite and rollback.sqlite in it's own folder "map" so this folder can be put in ramdisk.
