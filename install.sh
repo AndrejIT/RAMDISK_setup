@@ -23,4 +23,5 @@ usermod -G $USERNAME user
 
 cp $SERVICE /etc/init.d/
 chmod +x /etc/init.d/$SERVICE
-update-rc.d $SERVICE defaults
+#update-rc.d $SERVICE defaults
+systemctl enable $SERVICE
