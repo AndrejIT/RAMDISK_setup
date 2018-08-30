@@ -14,6 +14,8 @@
 # New version 2016.11
 # WARNING: minetest need to be changed to use /map/map.sqlite
 
+#Temporalily disabled map in ramdisk
+
 #Settings
 SERVICE="minetestserver"
 WORLD="justtest"
@@ -88,20 +90,20 @@ mt_start() {
         fi
         echo "done"
 
-        echo -n "Starting ramdisk 2..."
-        if [ -d $WORLDFOLDER/map.safe/ ]; then
-            mount -t ramfs -o size=$MAPRAM ramfs $WORLDFOLDER/map
-            chown $PERMISSIONS $WORLDFOLDER/map/
-            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map/map.sqlite
-        else
-            mkdir $WORLDFOLDER/map.safe
-            chown $PERMISSIONS $WORLDFOLDER/map.safe/
-            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
-            mount -t ramfs -o size=$MAPRAM ramfs $WORLDFOLDER/map
-            chown $PERMISSIONS $WORLDFOLDER/map/
-            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map/map.sqlite
-        fi
-        echo "done"
+        # echo -n "Starting ramdisk 2..."
+        # if [ -d $WORLDFOLDER/map.safe/ ]; then
+        #     mount -t ramfs -o size=$MAPRAM ramfs $WORLDFOLDER/map
+        #     chown $PERMISSIONS $WORLDFOLDER/map/
+        #     rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map/map.sqlite
+        # else
+        #     mkdir $WORLDFOLDER/map.safe
+        #     chown $PERMISSIONS $WORLDFOLDER/map.safe/
+        #     rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+        #     mount -t ramfs -o size=$MAPRAM ramfs $WORLDFOLDER/map
+        #     chown $PERMISSIONS $WORLDFOLDER/map/
+        #     rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map/map.sqlite
+        # fi
+        # echo "done"
     fi
 
 
@@ -130,12 +132,12 @@ mt_start() {
             echo -n "Stopping ramdisk 1..."
             umount $WORLDFOLDER/players
             echo "done"
-            echo -n "Syncing ramdisk 2..."
-            rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
-            echo "done"
-            echo -n "Stopping ramdisk 2..."
-            umount $WORLDFOLDER/map
-            echo "done"
+            # echo -n "Syncing ramdisk 2..."
+            # rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+            # echo "done"
+            # echo -n "Stopping ramdisk 2..."
+            # umount $WORLDFOLDER/map
+            # echo "done"
             touch $PIDFILE.failed
             #logger "[$SERVICE] Start failed!"
             exit 3
@@ -165,10 +167,10 @@ mt_stop() {
         umount $WORLDFOLDER/players
         echo "done"
 
-        echo -n "Syncing ramdisk 2..."
-        rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
-        umount $WORLDFOLDER/map
-        echo "done"
+        # echo -n "Syncing ramdisk 2..."
+        # rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+        # umount $WORLDFOLDER/map
+        # echo "done"
 
         #logger "[$SERVICE] Stopped!"
     fi
@@ -216,13 +218,13 @@ mt_sync() {
     rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/players/ $WORLDFOLDER/players.safe/
     echo "done"
 
-    echo -n "Syncing ramdisk 2..."
-    if [ ! -d $WORLDFOLDER/players.safe/ ]; then
-        mkdir $WORLDFOLDER/map.safe
-        chown $PERMISSIONS $WORLDFOLDER/map.safe/
-    fi
-    rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
-    echo "done"
+    # echo -n "Syncing ramdisk 2..."
+    # if [ ! -d $WORLDFOLDER/players.safe/ ]; then
+    #     mkdir $WORLDFOLDER/map.safe
+    #     chown $PERMISSIONS $WORLDFOLDER/map.safe/
+    # fi
+    # rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map/map.sqlite $WORLDFOLDER/map.safe/map.sqlite
+    # echo "done"
     logger "[$SERVICE] Synced!"
     mt_resume
 }
@@ -242,11 +244,11 @@ mt_backup() {
     fi
     gzip -ckNq $WORLDFOLDER/auth.txt > $WORLDFOLDER/auth.bac/auth`date +%F`.tar.gz
     chown $PERMISSIONS $WORLDFOLDER/auth.bac/auth`date +%F`.tar.gz
-    if [ ! -d $WORLDFOLDER/map.bac/ ]; then
-        mkdir $WORLDFOLDER/map.bac
-        chown $PERMISSIONS $WORLDFOLDER/map.bac/
-    fi
-    rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map.bac/map.sqlite
+    # if [ ! -d $WORLDFOLDER/map.bac/ ]; then
+    #     mkdir $WORLDFOLDER/map.bac
+    #     chown $PERMISSIONS $WORLDFOLDER/map.bac/
+    # fi
+    # rsync -q -t -og --chown=$PERMISSIONS $WORLDFOLDER/map.safe/map.sqlite $WORLDFOLDER/map.bac/map.sqlite
 
     mt_pause
     if [ ! -d $MINETESTFOLDER/debug.bac/ ]; then
