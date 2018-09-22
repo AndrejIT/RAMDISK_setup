@@ -6,5 +6,6 @@ Conflicts=minetestserver.service
 
 [Service]
 Type=oneshot
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/local/bin/minetestserver.sh save
 ExecStopPost=/bin/systemctl start minetestserver.service

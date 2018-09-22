@@ -1,6 +1,7 @@
 [Unit]
 Description=Backup minetest server
 After=local-fs.target
+Conflicts=minetestsave.service
 
 [Service]
 Type=oneshot

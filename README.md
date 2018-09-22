@@ -11,5 +11,4 @@ Creates backups of world.
 # TODO - regularly archive auth.txt file
 # TODO - regularly run maintenance scripts
 # TODO - rewrite maintenance scripts
-
-# TODO - find and fix problem, when map file is broken
+# TODO - maybe additionally do "online" backup: https://sqlite.org/backup.html
