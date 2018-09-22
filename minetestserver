@@ -1,4 +1,7 @@
 #!/bin/sh
+
+# TODO - this file is not needet anymore
+
 ### BEGIN INIT INFO
 # Provides:          minetestserver
 # Required-Start:    $local_fs $remote_fs

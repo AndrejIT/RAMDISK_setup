@@ -1,0 +1,20 @@
+[Unit]
+Description=Minetest server
+Wants=minetestramdisk.service
+After=local-fs.target minetestramdisk.service
+Before=shutdown.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/minetestserver.sh start
+Restart=always
+RestartSec=1
+StartLimitInterval=600
+StartLimitBurst=3
+
+User=minetestuser
+#Group=minetestuser
+
+# Needet to start at boot time
+[Install]
+WantedBy=default.target

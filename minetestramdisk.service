@@ -1,0 +1,12 @@
+[Unit]
+Description=Minetest RAMDISK
+After=local-fs.target
+Before=minetestserver.service shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/minetestserver.sh ramdisk_start
+ExecStop=/usr/local/bin/minetestserver.sh ramdisk_stop
+RemainAfterExit=yes
+
+Group=minetestuser

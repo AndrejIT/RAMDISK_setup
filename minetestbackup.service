@@ -1,0 +1,7 @@
+[Unit]
+Description=Backup minetest server
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/minetestserver.sh backup

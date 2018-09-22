@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup minetest server
+After=local-fs.target
+
+[Timer]
+OnCalendar=Mon *-*-* 23:05:00
+Unit=minetestbackup.service
+
+# Needet to start at boot time
+[Install]
+WantedBy=default.target

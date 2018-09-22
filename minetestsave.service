@@ -1,0 +1,10 @@
+[Unit]
+Description=Save minetest server data on disk
+After=local-fs.target
+Requires=minetestramdisk.service
+Conflicts=minetestserver.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/minetestserver.sh save
+ExecStopPost=/bin/systemctl start minetestserver.service

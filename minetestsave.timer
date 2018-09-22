@@ -1,0 +1,11 @@
+[Unit]
+Description=Save minetest server data on disk
+After=local-fs.target
+
+[Timer]
+OnCalendar=*-*-* 23:15:00
+Unit=minetestsave.service
+
+# Needet to start at boot time
+[Install]
+WantedBy=default.target
