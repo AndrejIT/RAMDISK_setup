@@ -79,9 +79,13 @@ systemctl enable $SAVESERVICE.timer
 # TODO Register ARCHIVE service and timer
 # TODO Register MAINTENANCE service and timer
 
-# Executable for maintenance
-cp --no-preserve=mode,ownership clear_players.py $MINETESTFOLDER/
-chmod +x $MINETESTFOLDER/clear_players.py
-
+echo "Minetestserver MAINTENANCE install..."
+# Folder for maintenance
+mkdir $MINETESTFOLDER/maintenance
+# Executables for maintenance
+cp --no-preserve=mode,ownership clear_players.py $MINETESTFOLDER/maintenance/
+chmod +x $MINETESTFOLDER/maintenance/clear_players.py
+cp --no-preserve=mode,ownership clear_players.sqlite.py $MINETESTFOLDER/maintenance/
+chmod +x $MINETESTFOLDER/maintenance/clear_players.sqlite.py
 
 echo "End of Minetestserver install"

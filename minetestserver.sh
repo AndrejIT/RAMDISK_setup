@@ -42,8 +42,11 @@ mt_backup() {
     rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER.safe/ $WORLDFOLDER.backup/
 }
 
-# MINETEST DAYLY Save
+# MINETEST DAYLY Save and Maintain
 mt_save() {
+    if [ -f $WORLDFOLDER/players.sqlite ]; then
+        $MINETESTFOLDER/maintenance/clear_players.sqlite.py $WORLDFOLDER/players.sqlite
+    fi
     rsync -q -t -W -r -og --chown=$PERMISSIONS $WORLDFOLDER/ $WORLDFOLDER.safe/
 }
 
